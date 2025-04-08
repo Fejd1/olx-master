@@ -1,1 +1,9 @@
-node_modules/
+# Ignoruj envki
+**/.env
+
+# Ignoruj node_modules wszędzie
+**/node_modules/
+
+# Ignoruj inne śmieci
+*.log
+.DS_Store
