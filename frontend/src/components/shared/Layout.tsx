@@ -1,9 +1,12 @@
-// src/components/shared/Layout.tsx
+// frontend/src/components/shared/Layout.tsx
+// Zmodyfikuj import i dodaj useAuthProtection
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Header from './Header';
+import { isTokenValid } from '@/lib/auth';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -12,12 +15,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Sprawdź, czy użytkownik jest zalogowany
-    const token = localStorage.getItem('token');
+    const isAuth = isTokenValid();
     
     // Jeśli nie jesteśmy na stronie logowania/rejestracji i nie ma tokenu, przekieruj do logowania
-    if (!token && pathname !== '/login' && pathname !== '/register' && pathname !== '/') {
+    if (!isAuth && pathname !== '/login' && pathname !== '/register' && pathname !== '/') {
       router.push('/login');
-    } else if (token && pathname === '/') {
+    } else if (isAuth && pathname === '/') {
       // Jeśli jest token i jesteśmy na stronie głównej, przekieruj do dashboardu
       router.push('/dashboard');
     }

@@ -12,6 +12,7 @@ export interface User {
     user_id: number;
     category: string;
     name: string;
+    olx_url?: string; // Dodaj to pole
     min_price: number | null;
     max_price: number | null;
     location: string | null;

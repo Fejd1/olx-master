@@ -3,7 +3,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
-
+const authMiddleware = require('../middleware/auth');
 // Rejestracja nowego użytkownika
 router.post('/register', async (req, res) => {
   try {
@@ -101,42 +101,26 @@ router.post('/login', async (req, res) => {
 });
 
 // Pobieranie danych użytkownika
-router.get('/user', async (req, res) => {
-  try {
-    // Pobierz token z nagłówka
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, message: 'Brak tokenu autoryzacyjnego' });
+router.get('/user', authMiddleware, async (req, res) => {
+    try {
+      const db = req.app.locals.db;
+      const userId = req.user.id;
+      
+      // Pobierz dane użytkownika
+      const [users] = await db.query('SELECT id, username, email, created_at, last_login FROM users WHERE id = ?', [userId]);
+      
+      if (users.length === 0) {
+        return res.status(404).json({ success: false, message: 'Użytkownik nie znaleziony' });
+      }
+      
+      res.json({
+        success: true,
+        user: users[0]
+      });
+    } catch (error) {
+      console.error('Błąd podczas pobierania danych użytkownika:', error);
+      res.status(500).json({ success: false, message: 'Wystąpił błąd podczas pobierania danych użytkownika' });
     }
-    
-    const token = authHeader.split(' ')[1];
-    
-    // Weryfikuj token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const db = req.app.locals.db;
-    
-    // Pobierz dane użytkownika
-    const [users] = await db.query('SELECT id, username, email, created_at, last_login FROM users WHERE id = ?', [decoded.id]);
-    
-    if (users.length === 0) {
-      return res.status(404).json({ success: false, message: 'Użytkownik nie znaleziony' });
-    }
-    
-    res.json({
-      success: true,
-      user: users[0]
-    });
-  } catch (error) {
-    console.error('Błąd podczas pobierania danych użytkownika:', error);
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Nieprawidłowy lub wygasły token' });
-    }
-    
-    res.status(500).json({ success: false, message: 'Wystąpił błąd podczas pobierania danych użytkownika' });
-  }
-});
+  });
 
 module.exports = router;

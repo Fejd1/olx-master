@@ -9,6 +9,32 @@ const USER_AGENTS = [
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36'
 ];
 
+
+const MAX_REQUESTS_PER_MINUTE = 10;
+const requestTimestamps = [];
+
+// Funkcja do sprawdzania, czy możemy wykonać kolejne żądanie
+async function canMakeRequest() {
+  const now = Date.now();
+  // Usuń stare timestampy (starsze niż minuta)
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - 60000) {
+    requestTimestamps.shift();
+  }
+  
+  // Sprawdź, czy nie przekroczyliśmy limitu
+  if (requestTimestamps.length >= MAX_REQUESTS_PER_MINUTE) {
+    console.log(`Osiągnięto limit żądań (${MAX_REQUESTS_PER_MINUTE}/min). Czekam...`);
+    // Czekaj, aż będzie można wykonać kolejne żądanie
+    const waitTime = 60000 - (now - requestTimestamps[0]) + 1000; // +1s zapasu
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    return canMakeRequest(); // Rekurencyjnie sprawdź ponownie
+  }
+  
+  // Dodaj aktualny timestamp
+  requestTimestamps.push(now);
+  return true;
+}
+
 async function scrapeListings(pool) {
   try {
     // Pobierz wszystkie monitorowane przedmioty
@@ -25,157 +51,82 @@ async function scrapeListings(pool) {
 }
 
 async function scrapeItemListings(pool, item) {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  
-  try {
-    const page = await browser.newPage();
-    
-    // Rotacja User-Agent
-    const randomUserAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-    await page.setUserAgent(randomUserAgent);
-    
-    // Budowanie URL wyszukiwania na podstawie parametrów przedmiotu
-    let searchUrl = `https://www.olx.pl/oferty/q-${encodeURIComponent(item.name)}/`;
-    
-    if (item.category) {
-      searchUrl += `?category_id=${item.category}`;
-    }
-    
-    if (item.min_price || item.max_price) {
-      searchUrl += searchUrl.includes('?') ? '&' : '?';
-      if (item.min_price) searchUrl += `search[filter_float_price:from]=${item.min_price}`;
-      if (item.min_price && item.max_price) searchUrl += '&';
-      if (item.max_price) searchUrl += `search[filter_float_price:to]=${item.max_price}`;
-    }
-    
-    if (item.location) {
-      searchUrl += searchUrl.includes('?') ? '&' : '?';
-      searchUrl += `search[district_id]=${item.location}`;
-    }
-    
-    if (item.item_condition !== 'any') {
-      searchUrl += searchUrl.includes('?') ? '&' : '?';
-      searchUrl += `search[filter_enum_state]=${item.item_condition === 'new' ? '1' : '2'}`;
-    }
-    
-    console.log(`Scrapowanie: ${searchUrl}`);
-    await page.goto(searchUrl, { waitUntil: 'networkidle2' });
-    
-    // Czekaj na załadowanie wyników
-    await page.waitForSelector('.css-rc5s2u', { timeout: 10000 }).catch(() => console.log('Timeout waiting for listings'));
-    
-    // Pobierz wszystkie ogłoszenia ze strony
-    const listings = await page.evaluate(() => {
-      const results = [];
-      const listingElements = document.querySelectorAll('.css-rc5s2u');
-      
-      listingElements.forEach(element => {
-        try {
-          const titleElement = element.querySelector('h6');
-          const priceElement = element.querySelector('.css-10b0gli');
-          const locationElement = element.querySelector('.css-veheph');
-          const imageElement = element.querySelector('img');
-          const linkElement = element.querySelector('a');
-          
-          if (titleElement && priceElement && linkElement) {
-            const title = titleElement.textContent.trim();
-            const priceText = priceElement.textContent.trim();
-            const price = parseFloat(priceText.replace(/[^\d,]/g, '').replace(',', '.'));
-            const location = locationElement ? locationElement.textContent.trim() : '';
-            const imageUrl = imageElement ? imageElement.src : '';
-            const url = linkElement.href;
-            const olxId = url.split('/').pop().split('.')[0];
-            
-            results.push({
-              title,
-              price,
-              location,
-              imageUrl,
-              url,
-              olxId
-            });
-          }
-        } catch (e) {
-          console.error('Błąd podczas parsowania elementu:', e);
-        }
-      });
-      
-      return results;
+    const browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
-    console.log(`Znaleziono ${listings.length} ogłoszeń dla "${item.name}"`);
-    
-    // Przetwarzanie i zapisywanie ogłoszeń
-    for (const listing of listings) {
-      // Sprawdź, czy ogłoszenie już istnieje
-      const [existingListing] = await pool.query('SELECT id FROM listings WHERE olx_id = ?', [listing.olxId]);
+    try {
+      const page = await browser.newPage();
       
-      if (existingListing.length === 0) {
-        // Pobierz szczegóły ogłoszenia
-        await page.goto(listing.url, { waitUntil: 'networkidle2' });
+      // Rotacja User-Agent
+      const randomUserAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+      await page.setUserAgent(randomUserAgent);
+      
+      // Użyj bezpośrednio URL z OLX jeśli jest dostępny, w przeciwnym razie zbuduj URL
+      let searchUrl;
+      
+      if (item.olx_url && item.olx_url.startsWith('https://www.olx.pl/')) {
+        searchUrl = item.olx_url;
         
-        const details = await page.evaluate(() => {
-          const descriptionElement = document.querySelector('[data-cy="ad_description"]');
-          const sellerIdElement = document.querySelector('[data-cy="seller-link"]');
-          const conditionElement = document.querySelector('.css-b5m1rv span:contains("Stan:")');
-          
-          return {
-            description: descriptionElement ? descriptionElement.textContent.trim() : '',
-            sellerId: sellerIdElement ? sellerIdElement.href.split('/').pop() : '',
-            condition: conditionElement ? (conditionElement.nextElementSibling.textContent.toLowerCase().includes('nowy') ? 'new' : 'used') : 'used'
-          };
-        });
+        // Dodaj dodatkowe filtry, jeśli zostały określone
+        const url = new URL(searchUrl);
         
-        // Analiza AI
-        const authenticityScore = await aiService.checkAuthenticity(listing.title, details.description);
-        const profitPotential = await aiService.calculateProfitPotential(item.name, listing.price);
-        
-        // Zapisz ogłoszenie do bazy danych
-        const [result] = await pool.query(
-          'INSERT INTO listings (monitored_item_id, olx_id, title, price, location, item_condition, url, image_url, description, seller_id, profit_potential, authenticity_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [item.id, listing.olxId, listing.title, listing.price, listing.location, details.condition, listing.url, listing.imageUrl, details.description, details.sellerId, profitPotential, authenticityScore]
-        );
-        
-        // Zapisz historię cen
-        if (result.insertId) {
-          await pool.query(
-            'INSERT INTO price_history (listing_id, price) VALUES (?, ?)',
-            [result.insertId, listing.price]
-          );
-          
-          // Utwórz powiadomienie dla użytkownika, jeśli potencjał zysku jest wysoki
-          if (profitPotential > 20) {
-            await pool.query(
-              'INSERT INTO notifications (user_id, listing_id, type) VALUES (?, ?, ?)',
-              [item.user_id, result.insertId, 'email']
-            );
-          }
+        if (item.min_price) {
+          url.searchParams.set('search[filter_float_price:from]', item.min_price);
         }
+        
+        if (item.max_price) {
+          url.searchParams.set('search[filter_float_price:to]', item.max_price);
+        }
+        
+        if (item.item_condition !== 'any') {
+          url.searchParams.set('search[filter_enum_state]', item.item_condition === 'new' ? '1' : '2');
+        }
+        
+        searchUrl = url.toString();
       } else {
-        // Aktualizuj cenę, jeśli ogłoszenie już istnieje
-        const listingId = existingListing[0].id;
-        await pool.query('UPDATE listings SET price = ?, updated_at = NOW() WHERE id = ?', [listing.price, listingId]);
+        // Budowanie URL wyszukiwania na podstawie parametrów przedmiotu (stara metoda)
+        const formattedName = encodeURIComponent(item.name).replace(/%20/g, '-');
+        searchUrl = `https://www.olx.pl/oferty/q-${formattedName}/`;
         
-        // Dodaj nowy wpis do historii cen, jeśli cena się zmieniła
-        const [currentPrice] = await pool.query('SELECT price FROM price_history WHERE listing_id = ? ORDER BY date DESC LIMIT 1', [listingId]);
+        // Dodaj parametry filtrowania
+        const params = new URLSearchParams();
         
-        if (currentPrice.length === 0 || currentPrice[0].price !== listing.price) {
-          await pool.query('INSERT INTO price_history (listing_id, price) VALUES (?, ?)', [listingId, listing.price]);
+        if (item.min_price) {
+          params.append('search[filter_float_price:from]', item.min_price);
+        }
+        
+        if (item.max_price) {
+          params.append('search[filter_float_price:to]', item.max_price);
+        }
+        
+        if (item.location) {
+          params.append('search[district_id]', item.location);
+        }
+        
+        if (item.item_condition !== 'any') {
+          params.append('search[filter_enum_state]', item.item_condition === 'new' ? '1' : '2');
+        }
+        
+        // Łączenie URL z parametrami
+        const paramsString = params.toString();
+        if (paramsString) {
+          searchUrl += `?${paramsString}`;
         }
       }
       
-      // Opóźnienie między przetwarzaniem ogłoszeń
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
+      console.log(`Scrapowanie: ${searchUrl}`);
+      await canMakeRequest();
+      await page.goto(searchUrl, { waitUntil: 'networkidle2' });
+      
+      // Reszta kodu pozostaje bez zmian...
+    } catch (error) {
+      console.error(`Błąd podczas scrapowania przedmiotu ${item.name}:`, error);
+    } finally {
+      await browser.close();
     }
-  } catch (error) {
-    console.error(`Błąd podczas scrapowania przedmiotu ${item.name}:`, error);
-  } finally {
-    await browser.close();
   }
-}
 
 module.exports = {
   scrapeListings

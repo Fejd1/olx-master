@@ -16,11 +16,26 @@ export default function ListingDetails({ listing, priceHistory }: ListingDetails
     const [showFullDescription, setShowFullDescription] = useState(false);
 
     // Przygotuj dane do wykresu cen
-    const chartData = priceHistory.map(item => ({
-        date: new Date(item.date).toLocaleDateString('pl-PL'),
-        price: item.price
-    }));
-
+    const chartData = priceHistory.map(item => {
+        // Upewnij się, że data jest prawidłowym obiektem Date
+        let date;
+        try {
+          date = new Date(item.date);
+          // Sprawdź, czy data jest prawidłowa
+          if (isNaN(date.getTime())) {
+            throw new Error('Invalid date');
+          }
+        } catch (e) {
+          // W przypadku błędu użyj aktualnej daty
+          console.warn('Nieprawidłowy format daty:', item.date);
+          date = new Date();
+        }
+        
+        return {
+          date: date.toLocaleDateString('pl-PL'),
+          price: typeof item.price === 'number' ? item.price : parseFloat(item.price)
+        };
+      });
     return (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6 flex justify-between items-center">

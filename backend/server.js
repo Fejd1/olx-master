@@ -31,9 +31,10 @@ app.locals.db = pool;
 
 // Harmonogram scrapowania (co 30 minut)
 cron.schedule('*/30 * * * *', async () => {
-  console.log('Uruchamianie scrapera OLX...');
-  await scraperService.scrapeListings(pool);
-});
+    console.log('Uruchamianie scrapera OLX...');
+    await scraperService.scrapeListings(pool);
+  });
+  
 
 // Importowanie routerów
 const authRoutes = require('./routes/auth');
@@ -58,6 +59,17 @@ app.use((err, req, res, next) => {
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
+
+app.post('/api/scraper/trigger', async (req, res) => {
+    try {
+      console.log('Ręczne uruchamianie scrapera OLX...');
+      await scraperService.scrapeListings(pool);
+      res.json({ success: true, message: 'Scraper uruchomiony pomyślnie' });
+    } catch (error) {
+      console.error('Błąd podczas uruchamiania scrapera:', error);
+      res.status(500).json({ success: false, message: 'Wystąpił błąd podczas uruchamiania scrapera' });
+    }
+  });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
