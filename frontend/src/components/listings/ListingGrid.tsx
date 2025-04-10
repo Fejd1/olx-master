@@ -8,6 +8,16 @@ interface ListingsGridProps {
 }
 
 export default function ListingsGrid({ listings, isLoading = false }: ListingsGridProps) {
+
+  const averagePrice = listings.reduce((acc, listing) => {
+    const price = parseFloat(listing.price); // Convert string to number
+    return acc + price;
+  }, 0) / listings.length;
+  
+  const bestOffers = listings.filter((x) => (!x.description?.includes("Luxtrade") && x.item_condition == "Stan: Używane" && averagePrice - x.price > 200))
+
+
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -40,49 +50,54 @@ export default function ListingsGrid({ listings, isLoading = false }: ListingsGr
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {listings.map((listing) => (
-        <div key={listing.id} className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="relative pb-[56.25%]">
-            <img 
-              src={listing.image_url || '/placeholder.png'} 
-              alt={listing.title}
-              className="absolute h-full w-full object-cover"
-            />
-          </div>
-          <div className="p-4">
-            <h3 className="font-medium text-gray-900 truncate">{listing.title}</h3>
-            <p className="text-lg font-bold text-gray-900 mt-1">{listing.price} zł</p>
-            <p className="text-sm text-gray-500 mt-1">{listing.location}</p>
-            
-            <div className="mt-2 flex items-center">
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                listing.profit_potential > 20 ? 'bg-green-100 text-green-800' :
-                listing.profit_potential > 10 ? 'bg-yellow-100 text-yellow-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                Potencjalny zysk: {typeof listing.profit_potential === 'number' ? listing.profit_potential.toFixed(2) : '0.00'}%
-              </span>
+      {listings
+        .filter((x) => (!x.description?.includes("Luxtrade") && x.item_condition == "Stan: Używane" || "Stan: Nowe" ))
+        .sort((a, b) => {
+          // Porównanie cen w porządku rosnącym
+          return a.price - b.price;
+        })
+        .map((listing) => (
+          <div key={listing.id} className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="relative pb-[56.25%]">
+              <img
+                src={listing.image_url || '/placeholder.png'}
+                alt={listing.title}
+                className="absolute h-full w-full object-cover"
+              />
             </div>
-            
-            <div className="mt-4 flex justify-between">
-              <Link
-                href={`/listings/${listing.id}`}
-                className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-              >
-                Szczegóły
-              </Link>
-              <a
-                href={listing.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-              >
-                Zobacz na OLX
-              </a>
+            <div className="p-4">
+              <h3 className="font-medium text-gray-900 truncate">{listing.title}</h3>
+              <p className="text-lg font-bold text-gray-900 mt-1">{listing.price} zł</p>
+              <p className="text-sm text-gray-500 mt-1">{listing.location}</p>
+
+              <div className="mt-2 flex items-center">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${listing.profit_potential > 20 ? 'bg-green-100 text-green-800' :
+                  listing.profit_potential > 10 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                  Potencjalny zysk: {(averagePrice - listing.price).toFixed(0)} zł
+                </span>
+              </div>
+
+              <div className="mt-4 flex justify-between">
+                <Link
+                  href={`/listings/${listing.id}`}
+                  className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                >
+                  Szczegóły
+                </Link>
+                <a
+                  href={listing.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                >
+                  Zobacz na OLX
+                </a>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
     </div>
   );
 }

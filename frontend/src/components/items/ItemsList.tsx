@@ -52,7 +52,6 @@ export default function ItemsList({ items }: ItemsListProps) {
                 </div>
             )}
 
-            text
             <div className="overflow-hidden bg-white shadow sm:rounded-md">
                 <ul className="divide-y divide-gray-200">
                     {items.map((item) => (

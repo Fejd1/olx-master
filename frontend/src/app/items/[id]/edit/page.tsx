@@ -1,10 +1,11 @@
+// src/app/items/[id]/edit/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getItem } from '@/lib/api';
 import { MonitoredItem } from '@/types';
-import ItemForm from '@/components/items/ItemForm';
+import ItemFormWithUrlInput from '@/components/items/ItemFormWithIFrame';
 import { useAuthProtection } from '@/lib/auth';
 
 export default function EditItemPage() {
@@ -78,7 +79,7 @@ export default function EditItemPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Edytuj przedmiot</h1>
-      <ItemForm item={item} isEditing={true} />
+      <ItemFormWithUrlInput item={item} isEditing={true} />
     </div>
   );
 }

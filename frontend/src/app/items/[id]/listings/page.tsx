@@ -119,7 +119,7 @@ export default function ItemListingsPage() {
         <div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold">Ogłoszenia dla: {item.name}</h1>
+                    <h1 className="text-2xl text-gray-700 font-bold">Ogłoszenia dla: {item.name}</h1>
                     <p className="text-gray-500 mt-1">
                         {item.category && <span className="mr-2">{item.category}</span>}
                         {item.min_price && <span className="mr-2">Od: {item.min_price} zł</span>}

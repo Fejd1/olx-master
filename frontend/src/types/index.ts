@@ -10,15 +10,16 @@ export interface User {
   export interface MonitoredItem {
     id: number;
     user_id: number;
-    category: string;
+    category?: string; // Dodaj to pole, aby rozwiązać błędy TypeScript
     name: string;
     olx_url?: string; // Dodaj to pole
     min_price: number | null;
     max_price: number | null;
     location: string | null;
-    item_condition: 'new' | 'used' | 'any';
+    item_condition: string | null;
     created_at: string;
   }
+  
   
   export interface Listing {
     id: number;
@@ -27,7 +28,7 @@ export interface User {
     title: string;
     price: number;
     location: string;
-    item_condition: 'new' | 'used';
+    item_condition: string | null;
     url: string;
     image_url: string | null;
     description: string | null;
